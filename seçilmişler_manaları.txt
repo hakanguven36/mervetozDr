@@ -1,0 +1,2 @@
+2 yeşil; 1 sarı; 0 kırmızı; 3 renksiz
+kırmızılar atılacak.
