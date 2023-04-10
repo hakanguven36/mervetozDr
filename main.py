@@ -26,13 +26,11 @@ dfsecilmisler = pd.read_csv("secilmisler.csv", sep="\t")
 dfsecilmislertemiz = pd.DataFrame(dfsecilmisler.loc[dfsecilmisler["durum"] != 0])
 
 # dfsecilmislertemiz[istno] obj to int64
-dfsecilmislertemiz["istno"] = pd.to_numeric(dfsecilmislertemiz["istno"])
 print(dfsecilmislertemiz.dtypes)
 
 # ana datasetten kırmızıları at
 dftemiz = df.merge(dfsecilmislertemiz, how="right", on="Istasyon_No")
 
-df.loc[df["Istasyon_No"] == 17926]
 dftemiz.loc[dftemiz["date"].isnull()]
 
 
