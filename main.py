@@ -1,9 +1,17 @@
+import os
 import numpy
 import pandas as pd
 import pickle as pcl
+from xlsTOcsv import excelToCSVConverter, infoTXT_Birlestirici
 # python 3.9.13
 # pd.__version__ #1.5.3
 # pickle.format_version 4.0
+
+datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+excelToCSVConverter(datasetpath)
+infoTXT_Birlestirici(datasetpath)
+
+
 
 # verileri çek
 file = open('son.pcl', 'rb')
