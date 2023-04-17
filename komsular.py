@@ -5,22 +5,22 @@ import pandas as pd
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+"""Bu fonksiyonda istenen DF içinde 'istno', 'coordx', 'coordy' olmalı"""
+"""Talep edilen komşu sayısınca k1,m1,k2,m2... şeklinde komşuyu ve mesafeyi ayrı bir tabloya ekleyip döndürür."""
+"""mesafe fonksiyonuna bağımlıdır."""
 def KomsulariYaz(gelendf, komsusayisi):
     islemno = 0
 
-    dr = gelendf.copy()
+    dr = pd.DataFrame(gelendf.copy())
     for index, row in dr.iterrows():
         komsulartemp = mesafe(row, dr, komsusayisi)
         komsulartemp.reset_index(inplace=True, drop=True)
         for i , r in komsulartemp.iterrows():
-            dr.loc[index,"k"+str(i+1)] = r["istno"]
-            dr.loc[index,"m"+str(i+1)] = r["mesafe"]
+            dr.loc[index,"k"+str(i)] = r["istno"]
+            dr.loc[index,"m"+str(i)] = r["mesafe"] * 111 # lat-long * 111 = KM
         print("islemno", islemno)
         islemno += 1
     return dr
-
-
- # ddd = mesafe( df_gunes_komsu.iloc[0] ,df_gunes_komsu, 5)
 
 def mesafe(gelen, noktalar, komsusayisi):
     x = gelen.coordx
@@ -33,6 +33,3 @@ def mesafe(gelen, noktalar, komsusayisi):
     t.reset_index(inplace=True, drop=True)
 
     return t.iloc[1:komsusayisi+1]
-
-
-# deneme = KomsulariYaz(df_gunes_komsu, 7)

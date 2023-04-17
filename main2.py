@@ -1,15 +1,17 @@
 # BÖLÜM-2 Boşluk Doldurma
+import numpy
 import datetime
 import os
 import pickle as pcl
 import pandas as pd
 from komsular import KomsulariYaz
+from idwyapan import IDWyap
 # python 3.9.13
 # pd.__version__ #1.5.3
 # pickle.format_version 4.0
 
 # Verilerin bulunduğu klasör
-datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
 
 file_df = open(os.path.join(datasetpath, "file_df.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file_df))
@@ -30,6 +32,8 @@ df.rename(columns={"Istasyon_No": "istno", "GUNESLENME_SURESI_saat": "gunes", "M
 # eksik verileri komşulardan idw ile dolduralım.
 
 df_gunes = df[["istno", "date", "gunes"]]
+# şimdilik siliyorum df'yi
+del(df)
 #df_maxsic = df[["istno", "date", "maxsic"]]
 #df_minsic = df[["istno", "date", "minsic"]]
 #df_nem = df[["istno", "date", "nem"]]
@@ -70,11 +74,16 @@ df_gunes_temiz.reset_index(inplace=True, drop=True)
 # Komşuları (ve mesafeleri) belirleyip df_gunes_komsu tablosuna yazalım.
 df_gunes_komsu = istdf.loc[istdf["istno"].apply(lambda x: x in df_gunes_chosen6000.index)][["istno", "coordx", "coordy"]]
 df_gunes_komsu.reset_index(inplace=True, drop=True)
-deneme = KomsulariYaz(df_gunes_komsu, 6)
+df_gunes_komsu = KomsulariYaz(df_gunes_komsu, 6)
+# komsuların istno'larını integer yapalım
+df_gunes_komsu = df_gunes_komsu.astype({"k0": "int64", "k1": "int64", "k2": "int64", "k3": "int64", "k4": "int64", "k5": "int64"})
 
+# Belirlenen komşulardan df_gunes tablosundaki boş değerler için idw hesaplayıp değeri yerine yazalım.
+deneme1 = IDWyap(df_gunes_temiz, df_gunes_komsu, "gunes", 5, 2)
+deneme2 = pd.DataFrame(deneme1).sort_values(by=["date", "istno"])
+deneme2.reset_index(inplace=True, drop=True)
+deneme2.to_csv("dolduruldu.csv", sep=";", decimal=".")
 
-pd.DataFrame(df_gunes_komsu).to_csv("secilmisgunes.csv", sep=";", decimal=".")
-
-deneme = pd.DataFrame(df_gunes_temiz).merge(df_gunes_komsu, on="istno", how="left")
-deneme.to_csv("secilmis33nokta92to2022.csv", sep=";", decimal=".")
-
+df_gunes_temiz_sort = df_gunes_temiz.sort_values(by=["date", "istno"])
+df_gunes_temiz_sort .reset_index(inplace=True, drop=True)
+df_gunes_temiz_sort.to_csv("doldurulmadi.csv", sep=";", decimal=".")
