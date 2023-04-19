@@ -1,13 +1,11 @@
-import math
-import os
-import pickle
 import pandas as pd
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+# import warnings
+# warnings.simplefilter(action='ignore', category=FutureWarning)
 
 """Bu fonksiyonda istenen DF içinde 'istno', 'coordx', 'coordy' olmalı"""
 """Talep edilen komşu sayısınca k1,m1,k2,m2... şeklinde komşuyu ve mesafeyi ayrı bir tabloya ekleyip döndürür."""
 """mesafe fonksiyonuna bağımlıdır."""
+"""
 def KomsulariYaz(gelendf, komsusayisi):
     islemno = 0
 
@@ -32,4 +30,21 @@ def mesafe(gelen, noktalar, komsusayisi):
     t = t.sort_values(by=["mesafe"])
     t.reset_index(inplace=True, drop=True)
 
+    return t.iloc[1:komsusayisi+1]
+"""
+
+def komsulari_yaz(gelendf, komsusayisi):
+    dr = pd.DataFrame(gelendf.copy())
+    komsu_cols = [f'k{i}' for i in range(komsusayisi)]
+    mesafe_cols = [f'm{i}' for i in range(komsusayisi)]
+    dr[komsu_cols] = pd.DataFrame(dr.apply(lambda x: mesafe(x, dr, komsusayisi), axis=1).tolist(), index=dr.index)
+    dr[mesafe_cols] = dr[komsu_cols].apply(lambda x: x['mesafe']*111)
+    return dr[komsu_cols+mesafe_cols]
+
+def mesafe(gelen, noktalar, komsusayisi):
+    x = gelen.coordx
+    y = gelen.coordy
+    mesafeler = ((noktalar.coordx - x) ** 2 + (noktalar.coordy - y) ** 2) ** 0.5
+    t = pd.DataFrame({'istno': noktalar.istno, 'mesafe': mesafeler})
+    t = t.sort_values(by='mesafe')
     return t.iloc[1:komsusayisi+1]
