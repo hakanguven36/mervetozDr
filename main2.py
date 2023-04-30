@@ -11,8 +11,8 @@ from idwyapan import idw_yap
 # pickle.format_version 4.0
 
 # Verilerin bulunduğu klasör
-#datasetpath = "C:/Users/ozitron/Desktop/kullanımda/" # Evde
-datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/" # İşte
+datasetpath = "C:/Users/ozitron/Desktop/kullanımda/" # Evde
+#datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/" # İşte
 
 
 file_df = open(os.path.join(datasetpath, "file_df.pcl"), "rb")
@@ -62,8 +62,8 @@ print("oran(%):", (380090/667998)*100)  # seçilmiş istasyonların %57'si dolu 
 # %57 doluluk idw için yetersiz olacağı düşünüldü.
 # 6000 den fazla veri olan istasyonları seçelim
 df_gunes_chosen6000 = df_gunes_ordered.loc[df_gunes_ordered.values>6000]
-print(df_gunes_chosen6000.count()) #   33 istasyon
-print(df_gunes_chosen6000.sum()) # 298.967 adet değer var
+print("istasyon sayısı:", df_gunes_chosen6000.count()) #   33 istasyon
+print("değer sayısı:", df_gunes_chosen6000.sum()) # 298.967 adet değer var
 daysXist = (datetime.datetime(2022,12,31) - datetime.datetime(1992,1,1)).days * df_gunes_chosen6000.count()   # = 373.626 olması gereken değer
 print("oran(%)", (298967/373626)*100 ) # % 80 doluluk oranı bulundu. bu idw için yeterli görüldü.
 
@@ -76,9 +76,9 @@ df_gunes_temiz.reset_index(inplace=True, drop=True)
 # Komşuları (ve mesafeleri) belirleyip df_gunes_komsu tablosuna yazalım.
 df_gunes_komsu = istdf.loc[istdf["istno"].apply(lambda x: x in df_gunes_chosen6000.index)][["istno", "coordx", "coordy"]]
 df_gunes_komsu.reset_index(inplace=True, drop=True)
-df_gunes_komsu = komsulari_yaz(df_gunes_komsu, 6)
+df_gunes_komsu = komsulari_yaz(df_gunes_komsu, 5)
 # komsuların istno'larını integer yapalım
-df_gunes_komsu = df_gunes_komsu.astype({"k0": "int64", "k1": "int64", "k2": "int64", "k3": "int64", "k4": "int64", "k5": "int64"})
+df_gunes_komsu = df_gunes_komsu.astype({"k0": "int64", "k1": "int64", "k2": "int64", "k3": "int64", "k4": "int64"})
 
 # Belirlenen komşulardan df_gunes tablosundaki boş değerler için idw hesaplayıp değeri yerine yazalım.
 deneme1 = idw_yap(df_gunes_temiz, df_gunes_komsu, "gunes", 5, 2)
@@ -87,7 +87,7 @@ deneme2.reset_index(inplace=True, drop=True)
 deneme2.to_csv("dolduruldu.csv", sep=";", decimal=".")
 
 df_gunes_temiz_sort = df_gunes_temiz.sort_values(by=["date", "istno"])
-df_gunes_temiz_sort .reset_index(inplace=True, drop=True)
+df_gunes_temiz_sort.reset_index(inplace=True, drop=True)
 df_gunes_temiz_sort.to_csv("doldurulmadi.csv", sep=";", decimal=".")
 
 filename = open(os.path.join(datasetpath, "dfgunes.pcl"), "wb")
