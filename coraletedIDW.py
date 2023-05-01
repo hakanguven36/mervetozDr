@@ -41,33 +41,108 @@ def mesafe(row, tablo, komsu_sayisi):
     km = km.convert_dtypes()
     km = km.iloc[1:komsu_sayisi+1]
     km.reset_index(drop=True, inplace=True)
-    return km.unstack().to_list()
+    return km.unstack()
 
-komsular["km"] = komsular.apply(lambda x: mesafe(x, komsular, 10), axis=1)
-komsular = pd.DataFrame(komsular)
+kom_mes = komsular.apply(lambda x: mesafe(x, komsular, 10), axis=1)
+kom_mes["istno"] = komsular["istno"]
+kom_mes.set_index("istno", drop=True, inplace=True)
+#kom_mes.iloc[0,1]
+#kom_mes.loc[kom_mes.index == 17114, "k"][0].squeeze()
+
 # Bu komşuluk ilişkilerinin korelasyonununu bulalım. bu korelasyonu ek ağırlık olarak kullanacağız
 komsu_sayisi = 10
 
 corr = []
-for satir, row in komsular.iterrows():
+for i,row in komsular.iterrows():
     sol_istno = row["istno"]
+    sol_gunes = df_dolu.loc[df_dolu["istno"] == sol_istno]
     print(sol_istno, "----------------------")
     r2_score_arr = []
-    for i in range(komsu_sayisi):
-        k_istno = row["km"][i]
-        sol_gunes = df_dolu.loc[df_dolu["istno"] == sol_istno]
+    for t in range(komsu_sayisi):
+        k_istno = kom_mes.iloc[i,t]
         sag_gunes = df_dolu.loc[df_dolu["istno"] == k_istno]
         birlesik_gunes = sol_gunes.merge(sag_gunes, on="date", how="inner")
-        r2_score_arr.append(r2_score(birlesik_gunes["gunes_x"], birlesik_gunes["gunes_y"]))
+        r2_score_arr.append(r2_score(birlesik_gunes["gunes_x"].to_list(), birlesik_gunes["gunes_y"].to_list()))
      corr.append(r2_score_arr)
-komsular["corr"] = corr
+corr = pd.DataFrame(corr)
+corr["istno"] = komsular["istno"]
+corr.set_index("istno", inplace=True, drop=True)
+
+# Korelasyonları -1 - 1 arasından 0-1 arasına getirelim
+corr = (corr +1) / 2
+
+del(birlesik_gunes, df_gunes_chosen6000, df_gunes_ordered, i, k_istno, r2_score_arr, row, sag_gunes, sol_gunes, sol_istno, t)
+# ---------------------------
+orj_komsu_sayisi = 10
+power = 1
+pay = 0
+payda = 0
+
+df_sample = df_dolu.sample(1000)
+df_sample["tahmin"] = -1.0
+line = 0
+for r, row in df_sample.iterrows():
+    print(line)
+    line += 1
+
+    row_istno = row["istno"]
+    row_date = row["date"]
+    pay = 0
+    payda = 0
+    meancr = corr.iloc[corr.index == row_istno].sum().mean()
+    for i in range(komsu_sayisi):
+        k_istno = kom_mes.loc[kom_mes.index == row_istno, "k"][i].squeeze()
+        k_mes = kom_mes.loc[kom_mes.index == row_istno, "m"][i].squeeze()
+        if k_mes == 0:
+            continue
+        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"].squeeze()
+        ## Burada corr devreye giriyor.
+
+        # cr = corr.iloc[corr.index == row_istno, i].squeeze()
+        # k_val = k_val * cr / meancr
+
+        ##
+        if type(k_val) != np.float_:
+            continue
+        if np.isnan(k_val):
+            print("np.isnan hatası")
+            continue
+        pay += k_val / (k_mes ** power)
+        payda += 1 / (k_mes ** power)
+    if payda == 0:
+        continue
+    df_sample.loc[r, "tahmin"] = pay / payda
+
+r2score = r2_score(df_sample["gunes"], df_sample["tahmin"])
+print("r2score:", r2score)
+
+df_dolu.reset_index(drop=True, inplace=True )
+
+### Yalnızca Corelasyon haritası
+df_sample = df_dolu.sample(10)
+df_sample["tahmin"] = -1.0
+df_sample.reset_index(drop=True)
+line = 0
+for r, row in df_sample.iterrows():
+    print(line)
+    line += 1
+    row_istno = row["istno"]
+    row_date = row["date"]
+    k_val_total = 0
+    meancr = corr.iloc[corr.index == row_istno].sum().mean()
+    for i in range(komsu_sayisi):
+        k_istno = kom_mes.loc[kom_mes.index == row_istno, "k"][i].squeeze()
+        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"].squeeze()
+        ## Burada corr devreye giriyor.
+        cr = corr.iloc[corr.index == row_istno, i].squeeze()
+        k_val = k_val * cr / meancr
+        k_val_total += k_val
+    print( k_val)
+    df_sample.loc[r, "tahmin"] = k_val_total / komsu_sayisi
+
+r2score = r2_score(df_sample["gunes"], df_sample["tahmin"])
+print("r2score:", r2score)
 
 
 
 
-
-
-sol_istno = 17110
-for i in range(komsu_sayisi):
-    k_istno = komsular.head(1)["km"].squeeze()[9]
-    print(k_istno)

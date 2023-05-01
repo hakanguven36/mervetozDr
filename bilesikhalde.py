@@ -73,16 +73,17 @@ def idw_yap(row):
     for i in range(komsu_sayisi):
         k_istno = km[i]
         k_mes = km[i + orj_komsu_sayisi]
+        if k_mes == 0:
+            continue
+
         k_val = df.loc[(df["istno"] == k_istno) & (df["date"] == r_date)]["gunes"].squeeze()
         if type(k_val) != np.float_:
             continue
-        if k_mes == 0:
-            continue
         if np.isnan(k_val):
             continue
+
         pay += k_val / (k_mes ** power)
         payda += 1 / (k_mes ** power)
-
     if payda == 0:
         return -1.0
     return pay / payda
