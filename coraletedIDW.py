@@ -6,7 +6,8 @@ import numpy as np
 import pandas
 import pandas as pd
 
-datasetpath = "C:/Users/ozitron/Desktop/kullanımda/" # Evde
+#datasetpath = "C:/Users/ozitron/Desktop/kullanımda/" # Evde
+datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/" # İşte
 
 file_df = open(os.path.join(datasetpath, "file_df.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file_df))
@@ -95,20 +96,16 @@ for r, row in df_sample.iterrows():
         k_mes = kom_mes.loc[kom_mes.index == row_istno, "m"][i].squeeze()
         if k_mes == 0:
             continue
-        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"].squeeze()
+        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"]
+        if k_val.empty:
+            continue
+        k_val = k_val.squeeze()
         ## Burada corr devreye giriyor.
-
-        # cr = corr.iloc[corr.index == row_istno, i].squeeze()
-        # k_val = k_val * cr / meancr
-
+        cr = corr.iloc[corr.index == row_istno, i].squeeze()
+        k_val = (k_val * cr) / meancr
         ##
-        if type(k_val) != np.float_:
-            continue
-        if np.isnan(k_val):
-            print("np.isnan hatası")
-            continue
         pay += k_val / (k_mes ** power)
-        payda += 1 / (k_mes ** power)
+        payda += (1 / (k_mes ** power))
     if payda == 0:
         continue
     df_sample.loc[r, "tahmin"] = pay / payda
@@ -116,32 +113,43 @@ for r, row in df_sample.iterrows():
 r2score = r2_score(df_sample["gunes"], df_sample["tahmin"])
 print("r2score:", r2score)
 
+corr.mean(axis=1)
+
 df_dolu.reset_index(drop=True, inplace=True )
 
 ### Yalnızca Corelasyon haritası
-df_sample = df_dolu.sample(10)
+df_sample = df_dolu.sample(1000)
 df_sample["tahmin"] = -1.0
-df_sample.reset_index(drop=True)
+df_sample.reset_index(drop=True, inplace=True)
 line = 0
 for r, row in df_sample.iterrows():
-    print(line)
     line += 1
     row_istno = row["istno"]
     row_date = row["date"]
     k_val_total = 0
     meancr = corr.iloc[corr.index == row_istno].sum().mean()
+    totalcr = 0
+    dolu_hucre = 0
     for i in range(komsu_sayisi):
         k_istno = kom_mes.loc[kom_mes.index == row_istno, "k"][i].squeeze()
-        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"].squeeze()
+        k_val = df_dolu.loc[(df_dolu["istno"] == k_istno) & (df_dolu["date"] == row_date)]["gunes"]
+        if k_val.empty:
+            continue
+
+        k_val = k_val.squeeze()
+        dolu_hucre += 1
         ## Burada corr devreye giriyor.
         cr = corr.iloc[corr.index == row_istno, i].squeeze()
-        k_val = k_val * cr / meancr
+        k_val = (k_val * cr) ** 2
         k_val_total += k_val
-    print( k_val)
-    df_sample.loc[r, "tahmin"] = k_val_total / komsu_sayisi
+        totalcr += cr
+    df_sample.loc[r, "tahmin"] = (k_val_total / totalcr) * 0.5
+    print("line:",line,"  dolu:", dolu_hucre)
 
 r2score = r2_score(df_sample["gunes"], df_sample["tahmin"])
 print("r2score:", r2score)
+
+
 
 
 
