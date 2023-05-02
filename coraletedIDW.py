@@ -101,8 +101,8 @@ for r, row in df_sample.iterrows():
             continue
         k_val = k_val.squeeze()
         ## Burada corr devreye giriyor.
-        cr = corr.iloc[corr.index == row_istno, i].squeeze()
-        k_val = (k_val * cr) / meancr
+        # cr = corr.iloc[corr.index == row_istno, i].squeeze()
+        # k_val = (k_val * cr) / meancr
         ##
         pay += k_val / (k_mes ** power)
         payda += (1 / (k_mes ** power))
@@ -113,9 +113,7 @@ for r, row in df_sample.iterrows():
 r2score = r2_score(df_sample["gunes"], df_sample["tahmin"])
 print("r2score:", r2score)
 
-corr.mean(axis=1)
 
-df_dolu.reset_index(drop=True, inplace=True )
 
 ### Yalnızca Corelasyon haritası
 df_sample = df_dolu.sample(1000)

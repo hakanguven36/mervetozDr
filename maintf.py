@@ -2,9 +2,11 @@ import os.path
 import pickle as pcl
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-from tensorflow import keras
-import seaborn as sns
+
+
+
+
+
 
 
 datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/" # İşte

@@ -3,7 +3,6 @@ import os
 import pickle as pcl
 from sklearn.metrics import r2_score
 import numpy as np
-import pandas
 import pandas as pd
 
 datasetpath = "C:/Users/ozitron/Desktop/kullanımda/" # Evde
