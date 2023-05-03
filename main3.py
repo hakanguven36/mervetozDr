@@ -1,5 +1,8 @@
+import datetime
 import os
 import pickle as pcl
+
+import numpy as np
 import pandas as pd
 from sklearn.metrics import r2_score
 
@@ -9,6 +12,7 @@ if os.path.exists(datasetpath) == False:
 
 file = open(os.path.join(datasetpath, "file_df.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file))
+file.readable()
 file.close()
 file = open(os.path.join(datasetpath, "file_ist.pcl"), "rb")
 ist_df = pd.DataFrame(pcl.load(file))
@@ -78,25 +82,30 @@ kom_mes.set_index("istno", drop=True, inplace=True)
 # Öncelikle parametrelerimizi yazıyoruz.
 # komşu sayısı 10 ve power 2 alınarak yapılan denemelerde güneşlenme süresi bakımından,
 # % 70-80 aralığında korelasyon bulunmuştur.
-komsu_sayisi = 10
-power = 2
 
-# Aşağıdaki fonksiyonda kullanılacak değişkenleri ram'de sabitliyoruz.
-islem_no = 0
-toplam_islem = len(df.index)
 
 # Bu fonksiyon tablodaki herbir satır için (373659 adet) tek tek IDW hesaplaması yapıyor.
 # Bulunan değerlerin parametre ismine "_tahmin" şeklinde ayrı sütunda kaydediyor.
 # Böylece hali hazırda dolu değerler ile tahmin edilen değerlerin korelasyonları kontrol edilebilir.
 # Bu işlem 10-15 dk kadar sürebilir. (apply fonksiyonu'da aynı şekilde uzun sürdüğünden iterrow kullanıldı)
+"""
+komsu_sayisi = 10
+power = 2
+
 def IDW_yap(paramname):
     global df   # üzerine yazılacak
     global islem_no
     islem_no = 0
+    tamamlanma_yuzdesi = 0
+    old_tamamlanma_yuzdesi = -1
+    print(paramname, "için başlandı.")
 
     for r, row in df.iterrows():
         islem_no += 1
-        print(paramname, "Tamamlanma(%): ", int((islem_no/toplam_islem)*100))
+        tamamlanma_yuzdesi = int((islem_no/toplam_islem)*100)
+        if tamamlanma_yuzdesi != old_tamamlanma_yuzdesi:
+          print(paramname, "Tamamlanma(%): ", tamamlanma_yuzdesi)
+          old_tamamlanma_yuzdesi = tamamlanma_yuzdesi
 
         row_istno = row["istno"]
         row_date = row["date"]
@@ -128,7 +137,107 @@ def IDW_yap(paramname):
         df.loc[r, paramname + "_tahmin"] = pay / payda
 
 
-# Her bir parametre için IDW_yap fonksiyonunu çalıştırıyoruz.
+# Her parametre için IDW_yap fonksiyonunu çalıştırıyoruz.
 parametreler = df.columns[2:]
 for parametre in parametreler:
     IDW_yap(parametre)
+"""
+
+
+
+
+
+def idw_yapici(row, df, kom_mes, komsu_sayisi, power, paramname):
+    global islem_no
+    global tamamlanma_yuzdesi
+    global old_tamamlanma_yuzdesi
+
+    islem_no += 1
+    tamamlanma_yuzdesi = int((islem_no / toplam_islem) * 100)
+    if tamamlanma_yuzdesi != old_tamamlanma_yuzdesi:
+        print(paramname, "Tamamlanma(%): ", tamamlanma_yuzdesi)
+        old_tamamlanma_yuzdesi = tamamlanma_yuzdesi
+
+    row_istno = row["istno"]
+    row_date = row["date"]
+    pay = 0
+    payda = 0
+
+
+    for i in range(komsu_sayisi):
+        # her komşunun istasyon numarası ve mesafesi alınıyor
+        k_istno = kom_mes.loc[kom_mes.index == row_istno, "k"][i].squeeze()
+        k_mes = kom_mes.loc[kom_mes.index == row_istno, "m"][i].squeeze()
+        k_val = df.loc[(df["istno"] == k_istno) & (df["date"] == row_date)][paramname]
+
+        # Değer boş dönerse bunu atlayıp bir sonraki komşuya geçiyoruz
+        if k_val.empty:
+            continue
+        k_val = k_val.squeeze()
+        if np.isnan(k_val) or k_val is None:
+            continue
+
+        # IDW formülündeki pay ve payda
+        pay += k_val / (k_mes ** power)
+        payda += 1 / (k_mes ** power)
+
+        # paydanın 0 dönmesi durumunda program 0'a bölünemez hatası verecektir.
+        # Bu değeri -999 olarak dolduruyoruz. Bunları daha sonra eleyebiliriz.
+        if payda == 0:
+            return np.nan
+        return pay / payda
+
+
+komsu_sayisi = 10
+power = 2
+
+islem_no = 0
+toplam_islem = len(df.index)
+tamamlanma_yuzdesi = 0
+old_tamamlanma_yuzdesi = -1
+parametreler = df.columns[2:]
+
+# 5 adet parametre için doldurmaları başlatalım. 1 saat kadar sürecek!!!
+for parametre in parametreler:
+    df[parametre + "_tahmin"] = df.apply(lambda row: idw_yapici(row, df, kom_mes, komsu_sayisi, power, parametre), axis=1)
+
+# burada tahmin sütunlarının 100% dolduğu onaylanır.
+(df.count() / len(df.index)) * 100
+
+# Bu tabloyu kaydedelim.
+file = open(os.path.join(datasetpath, "df_tamamlandi.pcl"), "wb")
+pcl.dump(df, file)
+file.close()
+
+# Son olarak korelasyonlara bakalım
+df = pd.DataFrame(df)
+
+for parametre in parametreler:
+    indexler = df.loc[df[parametre].notnull()].index
+    score = r2_score(df.loc[indexler, parametre].to_list(), df.loc[indexler, parametre+"_tahmin"].to_list())
+    print(parametre, "\t", score)
+
+df.count() / len(df.index) * 100
+
+"""
+Sonuç
+n_sun 	 0.6170665295205193
+T_max 	 0.9437998740219037
+T_min 	 0.8861197060054262
+U_z 	 0.09668875858132941
+RH_mean	 0.4665202129758401
+güneş verisinde yeterli korelasyon yok. IDW superparametrelerini değiştirerek 70 üzerine çıkaralım.
+rüzgar ve nem için IDW kullanılamaz. 216 istasyon ile Korelasyon tablosu oluşturup oradan devam edelim.
+Yine de rüzgar ve nemdeki boşluk oranı % 2-3 civarında. Yani çok hayati bir etkisi yok.
+"""
+
+
+
+
+
+
+
+
+
+
+
