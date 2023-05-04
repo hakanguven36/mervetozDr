@@ -241,3 +241,6 @@ Yine de rüzgar ve nemdeki boşluk oranı % 2-3 civarında. Yani çok hayati bir
 
 
 
+
+
+
