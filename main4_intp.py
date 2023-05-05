@@ -6,6 +6,13 @@ import pandas as pd
 from sklearn.metrics import r2_score
 import scipy.interpolate as interpolate
 
+"""
+Burada rüzgar değerlerinin yüksek korelasyon gösteren istasyonlar arasında linear interpolasyon ile tamamlanması hedeflenmişti.
+Ancak son satırda oluşturulan korelasyon tablosu incelendiğinde istasyonlar arasında hiçbir ilişki olmadığı saptandı.
+ETo kütüphanesinin linear interpolasyon kullanarak boş değerleri doldurması mümkün. 
+O yüzden rüzgar için boş kısımlar boş bırakılacak.
+"""
+
 datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
 if os.path.exists(datasetpath) == False:
     datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
@@ -25,15 +32,21 @@ df_ruzgar_dolu = pd.DataFrame(df_ruzgar_dolu)
 
 # Her istasyonun 10 diğer istasyon ile ilişkisinden bir çıkarıma gidelim.
 istasyonlar = pd.DataFrame(df.groupby("istno").first().index)
-for r, row in istasyonlar.iterrows():
-    r_istno = row["istno"]
-    ruzgar_array1 = pd.DataFrame(df_ruzgar_dolu.loc[df_ruzgar_dolu["istno"] == r_istno, ["istno", "date", "U_z"]])
-    score_biriktir = []
-    for k, k_row in istasyonlar.iterrows():
-        k_istno = row["istno"]
-        ruzgar_array2 = pd.DataFrame(df_ruzgar_dolu.loc[df_ruzgar_dolu["istno"] == k_istno, ["istno", "date", "U_z"]])
-        birlesim = ruzgar_array1.merge(ruzgar_array2, on=["istno", "date"], how="inner")
-        score = r2_score(ruzgar_array1, ruzgar_array2)
-        score_biriktir.append(score)
 
+corr = []
+for i,row in istasyonlar.iterrows():
+    sol_istno = row["istno"]
+    sol_gunes = df_ruzgar_dolu.loc[df_ruzgar_dolu["istno"] == sol_istno]
+    r2_score_arr = []
+    for t in range(len(istasyonlar.index)):
+        k_istno = istasyonlar.loc[t,"istno"]
+        sag_gunes = df_ruzgar_dolu.loc[df_ruzgar_dolu["istno"] == k_istno]
+        birlesik_gunes = sol_gunes.merge(sag_gunes, on="date", how="inner")
+        r2_score_arr.append(r2_score(birlesik_gunes["U_z_x"].to_list(), birlesik_gunes["U_z_y"].to_list()))
+    r2_score_arr.sort(reverse=True)
+    corr.append(r2_score_arr)
+corr = pd.DataFrame(corr)
+corr["istno"] = istasyonlar["istno"]
+corr.set_index("istno", inplace=True, drop=True)
 
+corr.to_csv(os.path.join(datasetpath, "ruzgar istasyonlar arasi korelasyon.csv"), sep=";", decimal=".")
