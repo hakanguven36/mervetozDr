@@ -12,12 +12,19 @@ if os.path.exists(datasetpath) == False:
 file = open(os.path.join(datasetpath, "df_tamamlandi.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file))
 file.close()
+file = open(os.path.join(datasetpath, "file_ist.pcl"), "rb")
+ist_df = pd.DataFrame(pcl.load(file))
+file.close()
 del(file)
 
 df["n_sun"] = df["n_sun_tahmin"]
 df["T_max"] = df["T_max_tahmin"]
 df["T_min"] = df["T_min_tahmin"]
 df.drop(["n_sun_tahmin", "T_max_tahmin", "T_min_tahmin", "U_z_tahmin","RH_mean_tahmin"], axis=1, inplace=True)
+ist_df.rename(columns={"coordx": "lat",
+                       "coordy": "lon",
+                       "height": "z_msl"
+                       }, inplace=True)
 
 ist17886 = df.loc[df["istno"] == 17886]
 ist17886 = pd.DataFrame(ist17886)
@@ -25,14 +32,6 @@ ist17886.drop(columns=["istno"], inplace=True)
 ist17886.set_index("date", inplace=True, drop=True)
 
 
-file = open(os.path.join(datasetpath, "file_ist.pcl"), "rb")
-ist_df = pd.DataFrame(pcl.load(file))
-file.close()
-del(file)
-ist_df.rename(columns={"coordx": "lat",
-                       "coordy": "lon",
-                       "height": "z_msl"
-                       }, inplace=True)
 
 row = ist_df.loc[ist_df["istno"] == 17886]
 

@@ -1,6 +1,5 @@
 # BÖLÜM 1: Excel ve txt dosyalarından tüm verileri birleştirme
-
-# not tüm rar dosyalarını tek bir klasöre açınız. duplicate olmamasına özen gösteriniz.
+# Tüm rar dosyalarını tek bir klasöre açınız. duplicate olmamasına özen gösteriniz.
 # bu klasörde xlsx ve txt uzantılı dosyalar var. klasör ismini aşağıdaki datasetpath değişkenine yazınız.
 
 import datetime
