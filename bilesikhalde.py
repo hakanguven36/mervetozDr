@@ -449,6 +449,10 @@ print(df.count() / len(df.index) * 100)
 df.set_index("date", inplace=True, drop=True)
 
 istasyonlar = df.groupby("istno").first().index
+ist_df.rename(columns={"coordx": "lat",
+                       "coordy": "lon",
+                       "height": "z_msl"
+                       }, inplace=True)
 
 param_estimation_df_arr = []
 fao_df_arr = []
@@ -480,20 +484,112 @@ fao_df.reset_index(inplace=True, drop=True)
 
 
 # iki tabloyu birleştirip csv olarak dışarı verelim
-sonuc_df = param_est_df.join(fao_df)
+fao_df.drop("date", inplace=True, axis=1)
+sonuc_df = param_est_df.merge(fao_df, left_index=True, right_index=True)
 sonuc_df.to_csv(os.path.join(datasetpath, "sonuc_df.csv"), decimal=".", sep=";")
+
+# sütun yerleşimi düzenleme
+temp = sonuc_df[["istno", "date"]]
+sonuc_df.drop(["istno", "date"], inplace=True, axis=1)
+sonuc_df = temp.merge(sonuc_df, left_index=True,right_index=True)
+
 
 # ayrıca pcl ile kaydedelim
 file = open(os.path.join(datasetpath, "sonuc_df.pcl"), "wb")
+pcl.dump(sonuc_df, file)
+file.close()
+####### 3. BÖLÜM SONU ############
+
+
+####### 4. BÖLÜM ############
+# 4. GSI hesaplanıyor.
+import os
+import pickle as pcl
+import numpy as np
+import pandas as pd
+import datetime
+from eto import ETo
+import matplotlib.pyplot as plt
+# python 3.9.13
+# pd.__version__ #1.5.3
+# pickle.format_version 4.0
+
+datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
+if os.path.exists(datasetpath) == False:
+    datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+
+file = open(os.path.join(datasetpath, "sonuc_df.pcl"), "rb")
+df = pd.DataFrame(pcl.load(file))
+file.close()
+del file
+
+# zeytin parametreleri
+Tm_min = 0.0
+Tm_max = 7.0
+rad_min = 5.0
+rad_max = 12.0
+etp_min = 2.0
+etp_max = 5.0
+fot_min = 10.0
+fot_max = 11.0
+
+def doy(date):
+    return date.timetuple().tm_yday
+
+# phi olarak latude yazılır.
+def photoperiod(phi, doy, verbose=False):
+    phi = np.radians(phi)  # Convert to radians
+    light_intensity = 2.206 * 10 ** -3
+
+    C = np.sin(np.radians(23.44))  # sin of the obliquity of 23.44 degrees.
+    B = -4.76 - 1.03 * np.log(
+        light_intensity)  # Eq. [5]. Angle of the sun below the horizon. Civil twilight is -4.76 degrees.
+
+    # Calculations
+    alpha = np.radians(90 + B)  # Eq. [6]. Value at sunrise and sunset.
+    M = 0.9856 * doy - 3.251  # Eq. [4].
+    lmd = M + 1.916 * np.sin(np.radians(M)) + 0.020 * np.sin(np.radians(2 * M)) + 282.565  # Eq. [3]. Lambda
+    delta = np.arcsin(C * np.sin(np.radians(lmd)))  # Eq. [2].
+
+    # Defining sec(x) = 1/cos(x)
+    P = 2 / 15 * np.degrees(
+        np.arccos(np.cos(alpha) * (1 / np.cos(phi)) * (1 / np.cos(delta)) - np.tan(phi) * np.tan(delta)))  # Eq. [1].
+    return P
+
+
+
+df["i_Tmin"] = (df["T_min"] - Tm_min) / (Tm_max - Tm_min)
+df["i_rad"] = (df["R_s"] - rad_min) / (rad_max - rad_min)
+df["i_etp"] = (df["ETo_FAO_mm"] - etp_min) / (etp_max - etp_min)
+df["doy"] = df.apply(lambda x : doy(x["date"]), axis=1)
+lat_df = ist_df[["istno", "lat"]]
+df = df.merge(lat_df, how="outer", on="istno")
+df["fotoperiod"] = photoperiod(df["lat"], df["doy"])
+df["i_foto"] = (df["fotoperiod"] - fot_min) / (fot_max - fot_min)
+
+df["i_Tmin"].clip(lower=0.0, upper=1.0, inplace=True)
+df["i_rad"].clip(lower=0.0, upper=1.0, inplace=True)
+df["i_etp"].clip(lower=0.0, upper=1.0, inplace=True)
+df["i_foto"].clip(lower=0.0, upper=1.0, inplace=True)
+
+df["GSI"] = df["i_Tmin"] * df["i_rad"] * df["i_etp"] * df["i_foto"]
+
+
+df17 = pd.DataFrame(df.loc[df["istno"] == 17110])
+df17.set_index("date", inplace=True, drop=True)
+aylikort = df17.groupby(df17.date.dt.month)['GSI'].mean()
+
+aylikort = pd.DataFrame(aylikort)
+plt.plot(aylikort)
+plt.fill_between(aylikort.index, aylikort["GSI"])
+plt.show()
+
+
+
+
+
+
+
+file = open(os.path.join(datasetpath, "gsi_df.pcl"), "wb")
 pcl.dump(df, file)
 file.close()
-
-
-
-
-
-
-
-
-
-
