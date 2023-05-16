@@ -215,7 +215,7 @@ file.close()
 file = open(os.path.join(datasetpath, "file_ist.pcl"), "rb")
 ist_df = pd.DataFrame(pcl.load(file))
 file.close()
-del file, datasetpath
+del file
 print("Dosyalar başarıyla içeri aktarıldı.")
 
 # sütun isimlerini basitleştirelim
@@ -225,10 +225,6 @@ df.rename(columns={"Istasyon_No": "istno",
                    "MINIMUM_SICAKLIK_°C": "minsic",
                    "ORTALAMA_NEM_%": "nem",
                    "GUNLUK_ORTALAMA_HIZI_m_sn": "ruzgar"}, inplace=True)
-ist_df.rename(columns={"coordx": "lat",
-                       "coordy": "lon",
-                       "height": "z_msl"
-                       }, inplace=True)
 
 # Veriler inceleniyor.
 toplam_gun_sayisi = (datetime.datetime(2022, 12, 31) - datetime.datetime(1992, 1, 1)).days
@@ -279,7 +275,7 @@ df.reset_index(inplace=True, drop=True)
 # Seçilen istasyonların lat-lon ve yükseklik değerlerini "komsular" tablosuna alalım.
 secilen_istasyonlar = df.groupby(["istno"]).first().index
 komsular = ist_df.loc[ist_df.apply(lambda row: row["istno"] in secilen_istasyonlar, axis=1)]
-komsular = komsular[["istno", "lat", "lon"]]
+komsular = komsular[["istno", "coordx", "coordy", "height"]]
 komsular.reset_index(inplace=True, drop=True)
 print(komsular.head())
 
@@ -287,10 +283,10 @@ print(komsular.head())
 # Bu komşuları mesafe yakından uzağa olacak şekilde sıralayım en yakın 10 komşu ile DataFrame yapalım.
 def mesafe(row, tablo, komsu_sayisi):
     k = tablo["istno"]
-    m = ((tablo["lat"] - row["lat"].squeeze()) ** 2 + (tablo["lon"] - row["lon"].squeeze()) ** 2) ** 0.5
+    m = ((tablo["coordx"] - row["coordx"].squeeze()) ** 2 + (tablo["coordy"] - row["coordy"].squeeze()) ** 2) ** 0.5
     km = pd.DataFrame({"k": k, "m": m}).sort_values(by="m")
     km = km.convert_dtypes()
-    km = km.iloc[1:komsu_sayisi+1]
+    km = km.iloc[1:]    # ilk mesafe = 0 (kendisi)
     km.reset_index(drop=True, inplace=True)
     return km.unstack()
 kom_mes = komsular.apply(lambda x: mesafe(x, komsular, 10), axis=1)
@@ -301,16 +297,6 @@ del secilen_istasyonlar, df_gunes, df_gunes_secilen
 
 # IDW ile eksik verileri tamamlamaya hazırız!
 def idw_yapici(row, df, kom_mes, komsu_sayisi, power, paramname):
-    global islem_no
-    global tamamlanma_yuzdesi
-    global old_tamamlanma_yuzdesi
-
-    islem_no += 1
-    tamamlanma_yuzdesi = int((islem_no / toplam_islem) * 100)
-    if tamamlanma_yuzdesi != old_tamamlanma_yuzdesi:
-        print(paramname, "Tamamlanma(%): ", tamamlanma_yuzdesi)
-        old_tamamlanma_yuzdesi = tamamlanma_yuzdesi
-
     row_istno = row["istno"]
     row_date = row["date"]
     pay = 0
@@ -333,66 +319,64 @@ def idw_yapici(row, df, kom_mes, komsu_sayisi, power, paramname):
         pay += k_val / (k_mes ** power)
         payda += 1 / (k_mes ** power)
 
-        # paydanın 0 dönmesi hata verir. -np.nan olarak dolduruyoruz. Bunları daha sonra eleyebiliriz.
-        if payda == 0:
-            return np.nan
-        return pay / payda
+    # paydanın 0 dönmesi hata verir. -np.nan olarak dolduruyoruz. Bunları daha sonra eleyebiliriz.
+    if payda == 0:
+        return np.nan
+    return pay / payda
+# DONT RUN
+# komşu sayısı ve power hiperparametreleri için en uygun değerleri deneyerek bulalım.
+parametre = "gunes"
+df_gunes = df[["istno", "date", "gunes"]]
+df_gunes = df_gunes.loc[df_gunes["gunes"].notnull()]
+biggest_score = 0
+durum = ""
+for komsu_sayisi in range(5, 12):
+    for powerX10 in range(10,40,2):
+        power = powerX10 / 10.0
+        score_arr = []
+        for i in range(6):
+            sample_df = df_gunes.sample(100)
+            sample_df.reset_index(inplace=True, drop=True)
+            sample_df[parametre + "_tahmin"] = sample_df.apply(lambda row: idw_yapici(row, df_gunes, kom_mes, komsu_sayisi, power, parametre), axis=1)
+            if sample_df[parametre + "_tahmin"].isna().sum() > 0:
+                continue
+            score = r2_score(sample_df[parametre], sample_df[parametre + "_tahmin"])
+            score_arr.append(score)
+        score = np.mean(score_arr)
+        print("r2 while", "komsu sayisi:", komsu_sayisi, " -- power:", power, "==> ",  score)
+        if score > biggest_score:
+            biggest_score = score
+            durum = [komsu_sayisi, power]
 
+print("biggest_score", biggest_score)
+print("en yüksek skorun olduğu durum (komsu_sayisi, power):", durum)
+# Buradan en yüksek r2 değerini veren komşu sayısı: 10 ve power: 2 bulunmuştur.
+# DONT RUN END
+
+
+# 5 parametre için boş sütunları bu hiperparametreleri kullanarak IDW fonksiyonuyla dolduralım.
+# Buradan dönen değerleri "_tahmin" sonekiyle sütun olarak ekleyelim.
 komsu_sayisi = 10
-power = 2
-islem_no = 0
-toplam_islem = len(df.index)
-tamamlanma_yuzdesi = 0
-old_tamamlanma_yuzdesi = -1
-parametreler = df.columns[2:]
-
-# 5 parametre için değerin dolu yada boş olup olmadığına bakmaksızın...
-# idw ile doldurmaları başlatalım. Buradan dönen değerleri 'parametre'_tahmin ekiyle sütun olarak ekleyelim.
-# NOT: 1 saat kadar sürmüştür!!!
+power = 2.0
+parametreler = ["gunes", "maxsic", "minsic"]
 for parametre in parametreler:
-    # ## df[parametre + "_tahmin"] = df.apply(lambda row: idw_yapici(row, df, kom_mes, komsu_sayisi, power, parametre), axis=1)
-    print(parametre)
+    df_empty = df.loc[df[parametre].isna()]
+    df_empty[parametre + "_tahmin"] = df_empty.apply(lambda row: idw_yapici(row, df, kom_mes, komsu_sayisi, power, parametre), axis=1)
+    df[parametre+ "_tahmin"] = df_empty[parametre + "_tahmin"]
+    print(parametre, "tamamlandı.")
+
+df.replace(np.nan, 0, inplace=True)
+df["gunes"] = df["gunes"] + df["gunes_tahmin"]
+df["maxsic"] = df["maxsic"] + df["maxsic_tahmin"]
+df["minsic"] = df["minsic"] + df["minsic_tahmin"]
+df.drop(columns=["gunes_tahmin", "maxsic_tahmin", "minsic_tahmin"], inplace=True)
 
 # burada eklenen tahmin sütunlarının 100% dolduğu onaylanır.
 (df.count() / len(df.index)) * 100
 
-# Güneş tahminlerini doğruluyoruz.
-df_gunes_dolu = df.loc[df["gunes"].notnull]
-r2_score(df_gunes_dolu["gunes"], df_gunes_dolu["gunes_tahmin"])
-# NOT: güneşlenme için farklı komşu sayıları ve farklı power değerleri ile yapılan denemelerde
-# gerçek değer ile tahmin değeri arasında r2_score fonksiyonu ile yapılan karşılaştırmalarda şu sonuçlar bulundu:
-# k=5 p=2       score = 0.716163
-# k=10 p=2      score = 0.745457
-# k=10 p=3      score = 0.728464
-# k=10 p=1.5    score = 0.749967
-# k=10 p=1      score = 0.750000
-# k=8 p=1       score = 0.750048
-# k=3 p=1       score = 0.622882
-# k=5 p=1       score = 0.724000
-# k=10 p=0.8    score = 0.748687
-
-# Tüm parametreler için r2 hesaplayalım
-for parametre in parametreler:
-    dolu_indexler = df.loc[df[parametre].notnull()].index
-    score = r2_score(df.loc[dolu_indexler, parametre].to_list(), df.loc[dolu_indexler, parametre+"_tahmin"].to_list())
-    print(parametre, "\t", score)
-"""
-Sonuç
-gunes 	 0.7170665295205193
-maxsic 	 0.9437998740219037
-minsic 	 0.8861197060054262
-ruzgar 	 0.0966887585813294
-nem 	 0.4665202129758401
-"""
-# Burada rüzgar (U_z) ve nem (RH_mean) değerleri idw ile tahmin edildiğinde düşük r2 verdiği için farklı bir yöntem denendi.
-# Buna göre rüzgar ve nem verilerinde yüksek korelasyon gösteren komşu istasyonlar ile 33 * 33 lük bir tablo yapılacak..
-# en yüksek korelasyon gösteren 4-5 komşu ile linear interpolasyon ile değerler doldurulacaktı.
-# Ancak rüzgar bakımından korelasyonlar aşırı düşük bulunduğundan bu işlemden vazgeçildi.
-# İstasyon çiftleri arazındaki bazı korelasyon değerleri şöyledir:
-# 0.59, 0.40, 0.45, 0.55, 0.24, 0.61, -0.95, 0.52, 0.37, 0.04, 0.47, 0.13, -1.10, 0.45, 0.19
+# Bu işlem rüzgar ve nem içinde denendi. fakat ilişki çok düşük çıktı.
 # Ayrıca ordinary krigging de araştırıldı. Ancak yine doğru bir tamamlama yapılamadı.
-# Zaten seçilen 33 istasyonda güneş dışındaki verilerde önemli bir eksiklik olmadığı şu şekilde görülebilir:
-print(df.count() / len(df.index) * 100)
+# seçilen 33 istasyonda güneş dışındaki verilerde önemli bir eksiklik olmadığından böyle devam edildi
 # ETo kütüphanesi değerleri bu şekilde de kabul edebiliyor. Ve dahi istenirse linear intepolasyon uygulayabiliyor.
 
 # ETo kütüphanesinin istediği başlıkları ekleyelim.
@@ -402,10 +386,17 @@ df.rename(columns={"gunes":  "n_sun",
                    "ruzgar": "U_z",
                    "nem":    "RH_mean"
                    }, inplace=True)
+ist_df.rename(columns={"coordx": "lat",
+                       "coordy": "lon",
+                       "height": "z_msl"
+                       }, inplace=True)
 
 # Bu idw tahminlerini içeren tabloyu kaydedelim.
 file = open(os.path.join(datasetpath, "df_tamamlandi.pcl"), "wb")
 pcl.dump(df, file)
+file.close()
+file = open(os.path.join(datasetpath, "ist_df.pcl"), "wb")
+pcl.dump(ist_df, file)
 file.close()
 ####### 2. BÖLÜM SONU ############
 
@@ -424,36 +415,20 @@ from eto import ETo
 datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
 if os.path.exists(datasetpath) == False:
     datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+    if os.path.exists(datasetpath) == False:
+        print("dataset_path yerine uygun dosya yolunu yazınız.")
+        quit()
 
 file = open(os.path.join(datasetpath, "df_tamamlandi.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file))
 file.close()
-file = open(os.path.join(datasetpath, "file_ist.pcl"), "rb")
+file = open(os.path.join(datasetpath, "ist_df.pcl"), "rb")
 ist_df = pd.DataFrame(pcl.load(file))
 file.close()
 del file
 
-ist_df.rename(columns={"coordx": "lat",
-                       "coordy": "lon",
-                       "height": "z_msl"
-                       }, inplace=True)
-
-# IDW tahmini kabul edilenleri alıyoruz
-df["n_sun"] = df["n_sun_tahmin"]
-df["T_max"] = df["T_max_tahmin"]
-df["T_min"] = df["T_min_tahmin"]
-
-# diğer tahminleri atıyoruz.
-df.drop(["n_sun_tahmin", "T_max_tahmin", "T_min_tahmin", "U_z_tahmin","RH_mean_tahmin"], axis=1, inplace=True)
-print(df.count() / len(df.index) * 100)
 df.set_index("date", inplace=True, drop=True)
-
 istasyonlar = df.groupby("istno").first().index
-ist_df.rename(columns={"coordx": "lat",
-                       "coordy": "lon",
-                       "height": "z_msl"
-                       }, inplace=True)
-
 param_estimation_df_arr = []
 fao_df_arr = []
 for istasyon in istasyonlar:
@@ -493,7 +468,6 @@ temp = sonuc_df[["istno", "date"]]
 sonuc_df.drop(["istno", "date"], inplace=True, axis=1)
 sonuc_df = temp.merge(sonuc_df, left_index=True,right_index=True)
 
-
 # ayrıca pcl ile kaydedelim
 file = open(os.path.join(datasetpath, "sonuc_df.pcl"), "wb")
 pcl.dump(sonuc_df, file)
@@ -508,7 +482,6 @@ import pickle as pcl
 import numpy as np
 import pandas as pd
 import datetime
-from eto import ETo
 import matplotlib.pyplot as plt
 # python 3.9.13
 # pd.__version__ #1.5.3
@@ -517,9 +490,15 @@ import matplotlib.pyplot as plt
 datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
 if os.path.exists(datasetpath) == False:
     datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+    if os.path.exists(datasetpath) == False:
+        print("dataset_path yerine uygun dosya yolunu yazınız.")
+        quit()
 
 file = open(os.path.join(datasetpath, "sonuc_df.pcl"), "rb")
 df = pd.DataFrame(pcl.load(file))
+file.close()
+file = open(os.path.join(datasetpath, "ist_df.pcl"), "rb")
+ist_df = pd.DataFrame(pcl.load(file))
 file.close()
 del file
 
@@ -563,7 +542,7 @@ df["i_rad"] = (df["R_s"] - rad_min) / (rad_max - rad_min)
 df["i_etp"] = (df["ETo_FAO_mm"] - etp_min) / (etp_max - etp_min)
 df["doy"] = df.apply(lambda x : doy(x["date"]), axis=1)
 lat_df = ist_df[["istno", "lat"]]
-df = df.merge(lat_df, how="outer", on="istno")
+df = df.merge(lat_df, how="inner", on="istno")
 df["fotoperiod"] = photoperiod(df["lat"], df["doy"])
 df["i_foto"] = (df["fotoperiod"] - fot_min) / (fot_max - fot_min)
 
@@ -574,9 +553,56 @@ df["i_foto"].clip(lower=0.0, upper=1.0, inplace=True)
 
 df["GSI"] = df["i_Tmin"] * df["i_rad"] * df["i_etp"] * df["i_foto"]
 
+istasyonlar = df.groupby("istno").first().index
 
+file = open(os.path.join(datasetpath, "gsi_df.pcl"), "wb")
+pcl.dump(df, file)
+file.close()
+
+# Her istasyon için ayrı gsi tablosu yapıp csv olarak klasöre atalım.
+gsiler_path = os.path.join(datasetpath, "gsiler")
+if os.path.exists(gsiler_path) is False:
+    os.mkdir(gsiler_path)
+
+for istasyon in istasyonlar:
+    filename = os.path.join(gsiler_path, str(istasyon) + ".csv")
+    temp = pd.DataFrame(df.loc[df["istno"] == istasyon])
+    temp.to_csv(filename, sep=";", decimal=".")
+
+####### 4. BÖLÜM SONU ############
+
+
+####### 5. BÖLÜM ############
+# 5. Görselleştirmeler Grafikler.
+import os
+import pickle as pcl
+import numpy as np
+import pandas as pd
+import datetime
+import matplotlib.pyplot as plt
+# python 3.9.13
+# pd.__version__ #1.5.3
+# pickle.format_version 4.0
+
+datasetpath = "C:/Users/ozitron/Desktop/kullanımda/"
+if os.path.exists(datasetpath) == False:
+    datasetpath = "C:/Users/oguzfehmi.sen.TARIM/Desktop/veriler/"
+    if os.path.exists(datasetpath) == False:
+        print("dataset_path yerine uygun dosya yolunu yazınız.")
+        quit()
+
+file = open(os.path.join(datasetpath, "gsi_df.pcl"), "rb")
+df = pd.DataFrame(pcl.load(file))
+file.close()
+file = open(os.path.join(datasetpath, "ist_df.pcl"), "rb")
+ist_df = pd.DataFrame(pcl.load(file))
+file.close()
+del file
+
+
+
+# 17110 nolu istasyonun gsi değerleri aylık ortalamalarının grafiği
 df17 = pd.DataFrame(df.loc[df["istno"] == 17110])
-df17.set_index("date", inplace=True, drop=True)
 aylikort = df17.groupby(df17.date.dt.month)['GSI'].mean()
 
 aylikort = pd.DataFrame(aylikort)
@@ -584,12 +610,3 @@ plt.plot(aylikort)
 plt.fill_between(aylikort.index, aylikort["GSI"])
 plt.show()
 
-
-
-
-
-
-
-file = open(os.path.join(datasetpath, "gsi_df.pcl"), "wb")
-pcl.dump(df, file)
-file.close()
