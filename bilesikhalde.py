@@ -580,6 +580,8 @@ import numpy as np
 import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
+from matplotlib.image import BboxImage
+from matplotlib.transforms import Bbox, TransformedBbox
 # python 3.9.13
 # pd.__version__ #1.5.3
 # pickle.format_version 4.0
@@ -603,10 +605,16 @@ del file
 
 # 17110 nolu istasyonun gsi değerleri aylık ortalamalarının grafiği
 df17 = pd.DataFrame(df.loc[df["istno"] == 17110])
-aylikort = df17.groupby(df17.date.dt.month)['GSI'].mean()
+aylikort = df17.groupby(df17.date.dt.week)['GSI'].mean()
 
 aylikort = pd.DataFrame(aylikort)
 plt.plot(aylikort)
 plt.fill_between(aylikort.index, aylikort["GSI"])
+plt.show()
+
+cmap_names = sorted(m for m in plt.colormaps() if not m.endswith("_r"))
+
+fig, (ax1, ax2) = plt.subplots(ncols=1)
+ax2.add_artist(BboxImage(aylikort, cmap="Blues", data=np.arange(256).reshape((1, -1))))
 plt.show()
 
