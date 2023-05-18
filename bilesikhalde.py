@@ -580,8 +580,6 @@ import numpy as np
 import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
-from matplotlib.image import BboxImage
-from matplotlib.transforms import Bbox, TransformedBbox
 # python 3.9.13
 # pd.__version__ #1.5.3
 # pickle.format_version 4.0
@@ -601,20 +599,67 @@ ist_df = pd.DataFrame(pcl.load(file))
 file.close()
 del file
 
+istasyonlar = df.groupby("istno").first().index
+A = ist_df.loc[ist_df["istno"].isin(istasyonlar)]
 
+her_ist = []
+istasyonlar = df.groupby("istno").first().index
+for istasyon in istasyonlar:
+    temp = pd.DataFrame(df.loc[df["istno"] == istasyon])
+    temp = temp.groupby(temp.date.dt.isocalendar().week)['GSI'].mean()
+    plt.plot(temp)
 
-# 17110 nolu istasyonun gsi değerleri aylık ortalamalarının grafiği
-df17 = pd.DataFrame(df.loc[df["istno"] == 17110])
-aylikort = df17.groupby(df17.date.dt.week)['GSI'].mean()
-
-aylikort = pd.DataFrame(aylikort)
-plt.plot(aylikort)
-plt.fill_between(aylikort.index, aylikort["GSI"])
+plt.legend(istasyonlar)
+plt.xlabel("Haftalar")
+plt.ylabel("GSI")
+plt.title("Aylık ortalama GSI")
 plt.show()
 
-cmap_names = sorted(m for m in plt.colormaps() if not m.endswith("_r"))
 
-fig, (ax1, ax2) = plt.subplots(ncols=1)
-ax2.add_artist(BboxImage(aylikort, cmap="Blues", data=np.arange(256).reshape((1, -1))))
+# https://matplotlib.org/stable/gallery/lines_bars_and_markers/broken_barh.html
+tabcolors = ((1,0,0,1), (1,0.5,0,1), (1,1,0,1))
+fig, ax = plt.subplots()
+ax.broken_barh([(10, 50), (20,30), (30,10)], (1, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
+ax.set_xlim(0, 200)
+ax.set_ylim(0,30)
 plt.show()
+
+iller = [['17110','Çanakkale'],
+['17112','Çanakkale'],
+['17114','Balıkesir'],
+['17145','Balıkesir'],
+['17150','Balıkesir'],
+['17175','Balıkesir'],
+['17180','İzmir'],
+['17184','Manisa'],
+['17186','Manisa'],
+['17220','İzmir'],
+['17221','İzmir'],
+['17232','Aydın'],
+['17234','Aydın'],
+['17290','Muğla'],
+['17292','Muğla'],
+['17294','Muğla'],
+['17296','Muğla'],
+['17297','Muğla'],
+['17298','Muğla'],
+['17375','Antalya'],
+['17380','Antalya'],
+['17674','Balıkesir'],
+['17700','Balıkesir'],
+['17742','İzmir'],
+['17746','Manisa'],
+['17789','İzmir'],
+['17850','Aydın'],
+['17854','İzmir'],
+['17886','Muğla'],
+['17892','Burdur'],
+['17924','Muğla'],
+['17926','Antalya'],
+['17970','Antalya']]
+
+print(iller)
+
+iller = pd.DataFrame(iller)
+iller.loc[iller[1] == "Balıkesir"][0].to_list()
 
