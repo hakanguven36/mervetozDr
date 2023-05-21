@@ -580,6 +580,7 @@ import numpy as np
 import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 # python 3.9.13
 # pd.__version__ #1.5.3
 # pickle.format_version 4.0
@@ -600,30 +601,56 @@ file.close()
 del file
 
 istasyonlar = df.groupby("istno").first().index
-A = ist_df.loc[ist_df["istno"].isin(istasyonlar)]
+ist_df = ist_df.loc[ist_df["istno"].isin(istasyonlar)]
 
-her_ist = []
-istasyonlar = df.groupby("istno").first().index
-for istasyon in istasyonlar:
-    temp = pd.DataFrame(df.loc[df["istno"] == istasyon])
-    temp = temp.groupby(temp.date.dt.isocalendar().week)['GSI'].mean()
-    plt.plot(temp)
+l_colors = [(0,0,0,0),
+            (0,0.5,1,1),
+            (0, 1, 0, 1),
+            (1, 1, 0, 1),
+            (1, 0.5, 0, 1),
+            (1, 0, 0, 1)]
+def renk_yap(rakam):
+    if rakam < 0.1:
+        return l_colors[0]
+    elif rakam < 0.2:
+        return l_colors[1]
+    elif rakam < 0.4:
+        return l_colors[2]
+    elif rakam < 0.6:
+        return l_colors[3]
+    elif rakam < 0.8:
+        return l_colors[4]
+    return l_colors[5]
 
-plt.legend(istasyonlar)
-plt.xlabel("Haftalar")
-plt.ylabel("GSI")
-plt.title("Aylık ortalama GSI")
-plt.show()
+xrange = []
+for i in range(53):
+    xrange.append((i,1))
 
-
-# https://matplotlib.org/stable/gallery/lines_bars_and_markers/broken_barh.html
-tabcolors = ((1,0,0,1), (1,0.5,0,1), (1,1,0,1))
+legend_hendles = []
+legend_hendles.append(mpatches.Patch(color=(0,0.5,1,1), label='0.1 << 0.2'))
+legend_hendles.append(mpatches.Patch(color=(0, 1, 0, 1), label='0.2 << 0.4'))
+legend_hendles.append(mpatches.Patch(color=(1, 1, 0, 1), label='0.4 << 0.6'))
+legend_hendles.append(mpatches.Patch(color=(1, 0.5, 0, 1), label='0.6 << 0.8'))
+legend_hendles.append(mpatches.Patch(color=(1, 0, 0, 1), label='0.8 << 1.0'))
+#########################################
+# 1) Haftalık ortalama GSI (33 istasyon)
 fig, ax = plt.subplots()
-ax.broken_barh([(10, 50), (20,30), (30,10)], (1, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
-ax.set_xlim(0, 200)
-ax.set_ylim(0,30)
-plt.show()
+ax.set_xlim(0, 53)
+ax.set_ylim(0, 33)
+ax.legend(handles=legend_hendles)
+for i, istasyon in enumerate(istasyonlar):
+    temp = df.loc[df["istno"] == istasyon]
+    temp = temp.groupby(temp.date.dt.isocalendar().week)['GSI'].mean()
+    temp = pd.DataFrame(temp)
+    temp["renk"] = temp.apply(lambda x: renk_yap(x["GSI"]), axis=1)
+    tabcolors = temp["renk"].to_list()
+    ax.broken_barh(xrange, (i, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
+plt.xlabel("Haftalar")
+plt.ylabel("İstasyonlar")
+plt.yticks(ticks=np.arange(33), labels=ist_df["Istasyon_Adi"])
+plt.title("Haftalık ortalama GSI")
 
+# 2) Haftalık ortalama GSI (iller bazında)
 iller = [['17110','Çanakkale'],
 ['17112','Çanakkale'],
 ['17114','Balıkesir'],
@@ -657,9 +684,69 @@ iller = [['17110','Çanakkale'],
 ['17924','Muğla'],
 ['17926','Antalya'],
 ['17970','Antalya']]
+iller = pd.DataFrame(iller, columns=["istno", "ilname"])
+iller = iller.astype({"istno": "int64"})
+df_iller = df.merge(iller, on="istno")
 
-print(iller)
+ilnames = df_iller.groupby("ilname").first().index
 
-iller = pd.DataFrame(iller)
-iller.loc[iller[1] == "Balıkesir"][0].to_list()
+fig, ax = plt.subplots()
+ax.set_xlim(0, 53)
+ax.set_ylim(0, 8)
+ax.legend(handles=legend_hendles)
+for i, ilname in enumerate(ilnames):
+    temp = df_iller.loc[df_iller["ilname"] == ilname]
+    temp = temp.groupby(temp.date.dt.isocalendar().week)['GSI'].mean()
+    temp = pd.DataFrame(temp)
+    temp["renk"] = temp.apply(lambda x: renk_yap(x["GSI"]), axis=1)
+    tabcolors = temp["renk"].to_list()
+    ax.broken_barh(xrange, (i, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
+plt.xlabel("Haftalar")
+plt.ylabel("İller")
+plt.yticks(ticks=np.arange(8), labels=ilnames)
+plt.title("Haftalık ortalama GSI")
 
+# 3) Haftalık ortalama GSI (Yıllar bazında)
+df_yillar = df.copy()
+df_yillar["yil"] = df_yillar["date"].dt.year
+yil_arr = df_yillar["yil"].unique()
+
+fig, ax = plt.subplots()
+ax.set_xlim(0, 53)
+ax.set_ylim(0, 31)
+ax.legend(handles=legend_hendles)
+for i, yil in enumerate(yil_arr):
+    temp = df_yillar.loc[df_yillar["yil"] == yil]
+    temp = temp.groupby(temp.date.dt.isocalendar().week)['GSI'].mean()
+    temp = pd.DataFrame(temp)
+    temp["renk"] = temp.apply(lambda x: renk_yap(x["GSI"]), axis=1)
+    tabcolors = temp["renk"].to_list()
+    ax.broken_barh(xrange, (i, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
+plt.xlabel("Haftalar")
+plt.ylabel("Yıllar")
+plt.yticks(ticks=np.arange(31), labels=yil_arr)
+plt.title("Haftalık ortalama GSI")
+
+# Aylık Ortalama Yıllar bazında
+fig, ax = plt.subplots()
+ax.set_xlim(0, 12)
+ax.set_ylim(0, 31)
+ax.legend(handles=legend_hendles)
+for i, yil in enumerate(yil_arr):
+    temp = df_yillar.loc[df_yillar["yil"] == yil]
+    temp = temp.groupby(temp.date.dt.month)['GSI'].mean()
+    temp = pd.DataFrame(temp)
+    temp["renk"] = temp.apply(lambda x: renk_yap(x["GSI"]), axis=1)
+    tabcolors = temp["renk"].to_list()
+    ax.broken_barh(xrange, (i, 1), facecolors=tabcolors)  # başlangıç ve uzunluk.
+plt.xlabel("Aylar")
+plt.ylabel("Yıllar")
+plt.yticks(ticks=np.arange(31), labels=yil_arr)
+plt.title("Aylık ortalama GSI")
+
+
+
+
+
+
+# https://matplotlib.org/stable/gallery/lines_bars_and_markers/broken_barh.html
