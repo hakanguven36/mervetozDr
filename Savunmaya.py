@@ -28,21 +28,6 @@ istasyonlar = df.groupby("istno").first().index
 ist_df = ist_df.loc[ist_df["istno"].isin(istasyonlar)]
 ist_df.reset_index(drop=True, inplace=True)
 
-### İstasyonlara göre gruplanmış
-df_indisler_yillik_ort = df[["istno", "date","ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"  ]]
-df_indisler_istort = df_indisler_yillik_ort.groupby("istno")["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
-df_indisler_istort.reset_index(inplace=True, drop=True)
-df_temp1 = ist_df
-df_temp1[["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]] =df_indisler_istort[["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
-df_temp1.to_csv("indisler istasyonlara göre.csv", sep=";", decimal=".", encoding="utf8")
-
-### Yıllara göre gruplanmış
-df_yillara_gore_grup = df[["istno", "date","ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
-df_yillara_gore_grup = df_yillara_gore_grup.groupby(df_yillara_gore_grup.date.dt.year)["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
-df_yillara_gore_grup.to_csv("indisler yıllara göre.csv", sep=";", decimal=".", encoding="utf8")
-
-### Pivot Table
-# önce şehirlere göre gruplandırmak gerekli.
 iller = [['17110','Çanakkale'],
 ['17112','Çanakkale'],
 ['17114','Balıkesir'],
@@ -78,25 +63,49 @@ iller = [['17110','Çanakkale'],
 ['17970','Antalya']]
 iller = pd.DataFrame(iller, columns=["istno", "ilname"])
 iller = iller.astype({"istno": "int64"})
-df_iller = df.merge(iller, on="istno")
+df = df.merge(iller, on="istno")
+df["year"] = df.date.dt.year
+df["month"] = df.date.dt.month
 
-df_iller["year"] = df_iller.date.dt.year
-pivot1 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["ETo_FAO_mm"])
-pivot2 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["i_Tmin"])
-pivot3 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["i_Tmin"])
-pivot4 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["i_etp"])
-pivot5 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["i_foto"])
-pivot6 = pd.pivot_table(df_iller, columns=["ilname"], index=["year"], values=["GSI"])
 
-pivot1.to_csv("pivot ETo_FAO_mm.csv", sep=";", decimal=".", encoding="utf8")
-pivot2.to_csv("pivot i_Tmin.csv", sep=";", decimal=".", encoding="utf8")
-pivot3.to_csv("pivot i_Tmin.csv", sep=";", decimal=".", encoding="utf8")
-pivot4.to_csv("pivot i_etp.csv", sep=";", decimal=".", encoding="utf8")
-pivot5.to_csv("pivot i_foto.csv", sep=";", decimal=".", encoding="utf8")
-pivot6.to_csv("pivot GSI.csv", sep=";", decimal=".", encoding="utf8")
 
+
+### İstasyonlara göre gruplanmış
+df_indisler_yillik_ort = df[["istno", "date","ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"  ]]
+df_indisler_istort = df_indisler_yillik_ort.groupby("istno")["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
+df_indisler_istort.reset_index(inplace=True, drop=True)
+df_temp1 = ist_df
+df_temp1[["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]] =df_indisler_istort[["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
+df_temp1.to_csv("indisler istasyonlara göre.csv", sep=";", decimal=".", encoding="utf8")
+
+### Yıllara göre gruplanmış
+df_yillara_gore_grup = df[["istno", "date","ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
+df_yillara_gore_grup = df_yillara_gore_grup.groupby(df_yillara_gore_grup.date.dt.year)["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
+df_yillara_gore_grup.to_csv("indisler yıllara göre.csv", sep=";", decimal=".", encoding="utf8")
+
+### Pivot Table
+for p in ["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]:
+    pivot = pd.pivot_table(df, columns=["ilname"], index=["year"], values=[p])
+    pivot.to_csv("pivot" + p + ".csv", sep=";", decimal=".", encoding="utf8")
 
 ### İllere göre gruplanmış
-df_indisler_illere_gore = df_iller[["istno", "ilname", "date", "ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
+df_indisler_illere_gore = df[["istno", "ilname", "date", "ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"]]
 df_indisler_illere_gore = df_indisler_illere_gore.groupby("ilname")["ilname", "ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
 df_indisler_illere_gore.to_csv("indisler illere göre.csv", sep=";", decimal=".", encoding="utf8")
+
+### Grafikler için excel'e veri sağlıyorum
+temp = df.groupby(["ilname", 'month'])["ilname", "month", "ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
+temp.to_csv(os.path.join(datasetpath, "iller aylar.xlsx"), sep=";", decimal=".", encoding="utf8")
+
+temp = df.groupby(["ilname", 'month'])["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].sum()
+temp.to_csv(os.path.join(datasetpath, "iller aylar sum.csv"), sep=";", decimal=".", encoding="utf8")
+
+temp = df.groupby(["ilname", 'month'])["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].sum().cumsum()
+temp.to_csv(os.path.join(datasetpath, "iller aylar cumsum.csv"), sep=";", decimal=".", encoding="utf8")
+
+temp = df.groupby(["ilname", 'year'])["ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"].mean()
+temp.to_csv(os.path.join(datasetpath, "iller yıllar mean.csv"), sep=";", decimal=".", encoding="utf8")
+
+
+
+
