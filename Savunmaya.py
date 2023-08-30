@@ -67,8 +67,17 @@ df = df.merge(iller, on="istno")
 df["year"] = df.date.dt.year
 df["month"] = df.date.dt.month
 
+df.columns
 
-
+############
+istisimdf = ist_df[["istno", "Istasyon_Adi"]]
+df = df.merge(istisimdf, on="istno")
+merve = df.groupby(["ilname", "Istasyon_Adi", "year","month"])['n_sun', 'T_max', 'T_min', 'U_z', 'RH_mean', 'R_n',
+       'R_s', 'G', 'T_mean', 'T_dew', 'RH_min', 'RH_max', 'P', 'e_a', 'gamma',
+       'e_max', 'e_min', 'e_s', 'delta', 'R_a', 'U_2', 'ETo_FAO_mm', 'i_Tmin',
+       'i_rad', 'i_etp', 'doy', 'lat', 'fotoperiod', 'i_foto', 'GSI'].mean()
+merve.to_csv(os.path.join(datasetpath, "merve hepsi ve iller.csv"), sep=";", decimal=".", encoding="utf8")
+############
 
 ### İstasyonlara göre gruplanmış
 df_indisler_yillik_ort = df[["istno", "date","ETo_FAO_mm", "i_Tmin", "i_rad", "i_etp", "i_foto", "GSI"  ]]
